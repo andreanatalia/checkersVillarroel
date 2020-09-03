@@ -19,71 +19,41 @@ public class VillarroelBot extends CheckersBoard implements CheckersPlayer {
         Player current_player = board.getCurrentPlayer();
 
         int depth = 4;
-        CheckersMove best_option = null;
+        CheckersMove best_move = null;
 
         try {
-            System.out.println("PIEZAS NEGRAS : " + board.countPiecesOfPlayer(current_player));
-            System.out.println("PIEZAS ROJAS : " + board.countPiecesOfPlayer(otherPlayer(current_player)));
-            System.out.println("PIEZAS REINAS NEGRAS : " + getNumberOfQueens(board, (current_player)));
-            System.out.println("PIEZAS REINAS ROJAS : " + getNumberOfQueens(board, otherPlayer(current_player)));
-            best_option = get_utility_Move(board, depth, current_player, true);
+          best_move = get_best_Move(board, depth, current_player, true);
 
         } catch (BadMoveException e) {
             e.printStackTrace();
         }
 
-        return best_option;
+        return best_move;
     }
 
-    private CheckersMove get_utility_Move(CheckersBoard board, int depth, Player player, boolean is_max_state) throws BadMoveException {
-        List<CheckersMove> possible_capture_list = board.possibleCaptures();
-        List<CheckersMove> possible_move_list = board.possibleMoves();
-        Map<CheckersMove, Double> utility_list_map = get_move_and_utility_for_successors_list(board, depth, player, is_max_state);
-        CheckersMove best_move = null;
+    private CheckersMove get_best_Move(CheckersBoard board, int depth, Player player, boolean is_max_state) throws BadMoveException {
 
-//        if (utility_list_map.isEmpty() && !possible_move_list.isEmpty()) {
-//            return possible_move_list.get(ThreadLocalRandom.current().nextInt(possible_move_list.size()));
-//        }
-        if(possible_capture_list.isEmpty() && possible_move_list.isEmpty()){
+        Map<CheckersMove, Integer> utility_list_map = get_move_and_utility_for_successors_list(board, depth, player, is_max_state);
+
+        if (!board.isCapturePossible() && !board.isMovePossible()) {
             return null;
         }
-        utility_list_map.forEach((key, value) -> System.out.println("Move=" + key + "  Utility=" + value));
 
-        return Collections.max(utility_list_map.entrySet(), Map.Entry.comparingByValue()).getKey();
+        return Collections.max(utility_list_map.entrySet(), Map.Entry.comparingByValue()).getKey(); // movement with maximum utility
     }
 
-//        if (!possible_capture_list.isEmpty()) {
-//            for (CheckersMove possible_capture : possible_capture_list) {
-//                next_state = board.clone();
-//                next_state.processMove(possible_capture);
-//                if (next_state.equals(max_state)) {
-//                    move = possible_capture;
-//                }
-//            }
-//        } else {
-//            if (!possible_move_list.isEmpty()) {
-//                for (CheckersMove possible_move : possible_move_list) {
-//                    next_state = board.clone();
-//                    next_state.processMove(possible_move);
-//                    if (next_state.equals(max_state)) {
-//                        move = possible_move;
-//                    }
-//                }
-//            }
-//        }
-//        return best_move;
-//    }
+    private int get_heuristic(CheckersBoard board, Player player) { // The heuristic depends on the number of pieces on the board.
 
-    private double get_heuristic(CheckersBoard board, Player player) { // The heuristic depends on the number of pieces on the board.
         int plain_cost = 10;
         int queen_cost = 100;
+
         int number_of_my_plain_pieces = board.countPiecesOfPlayer(player) - getNumberOfQueens(board, player);
         int number_of_enemy_plain_pieces = board.countPiecesOfPlayer(otherPlayer(player)) - getNumberOfQueens(board, otherPlayer(player));
 
         return ((number_of_my_plain_pieces * plain_cost) + (getNumberOfQueens(board, player) * queen_cost)
                 - (number_of_enemy_plain_pieces * plain_cost) - (getNumberOfQueens(board, otherPlayer(player)) * queen_cost)
         );
-        // returns 0 if it is a "tie"
+
     }
 
     public int getNumberOfQueens(CheckersBoard board, Player player) {
@@ -91,45 +61,51 @@ public class VillarroelBot extends CheckersBoard implements CheckersPlayer {
         int numberOfqueens = 0;
         for (int i = 0; i < 8; i++) {
             for (int j = 0; j < 8; j++) {
-                if (board.getBoard()[i][j] == 'R' && player == Player.RED || board.getBoard()[i][j] == 'B' && player == Player.BLACK) {
+                if ((board.getBoard()[i][j] == RED_CROWNED && player == Player.RED)
+                        || (board.getBoard()[i][j] == BLACK_CROWNED && player == Player.BLACK)) {
                     numberOfqueens++;
                 }
             }
         }
-        return numberOfqueens;
 
+        return numberOfqueens;
     }
 
-    private double get_utility_value(CheckersBoard board, int depth, Player player, boolean is_max_state) throws BadMoveException {
+    private int get_utility_value(CheckersBoard board, int depth, Player player, boolean is_max_state) throws BadMoveException {
 
         if (depth == 0) {
             return get_heuristic(board, player);
         }
 
-        double valueOfminimax = 0;
-        Map<CheckersMove, Double> utility_list_map = get_move_and_utility_for_successors_list(board, depth, player, is_max_state);
+        int minimax_value = 0;
 
-        if (is_max_state) {
-            valueOfminimax = Collections.<Double>max(utility_list_map.values());
-        } else {
-            valueOfminimax = Collections.<Double>min(utility_list_map.values());
+        Map<CheckersMove, Integer> utility_list_map = get_move_and_utility_for_successors_list(board, depth, player, is_max_state);
+
+        if(!utility_list_map.isEmpty()) {
+            if (is_max_state) {
+                minimax_value = Collections.max(utility_list_map.values());
+            } else {
+                minimax_value = Collections.min(utility_list_map.values());
+            }
         }
-        return valueOfminimax;
+
+        return minimax_value;
     }
 
-    public Map<CheckersMove, Double> get_move_and_utility_for_successors_list(CheckersBoard board, int depth, Player player, boolean max_state) throws BadMoveException {
+    public Map<CheckersMove, Integer> get_move_and_utility_for_successors_list(CheckersBoard board, int depth, Player player, boolean is_max_state) throws BadMoveException {
 
         Map<CheckersBoard, CheckersMove> successors = generate_successors(board);
-        Map<CheckersMove, Double> utility_and_move_list_map = new HashMap<>();
+        Map<CheckersMove, Integer> utility_and_move_list_map = new HashMap<>();
 
         if (successors != null) {
             for (Map.Entry<CheckersBoard, CheckersMove> entry : successors.entrySet()) {
                 CheckersBoard successor_board = entry.getKey();
                 CheckersMove successor_move = entry.getValue();
-                max_state = !max_state;
-                utility_and_move_list_map.put(successor_move, get_utility_value(successor_board, depth - 1, otherPlayer(player), max_state));
+                is_max_state = !is_max_state;
+                utility_and_move_list_map.put(successor_move, get_utility_value(successor_board, depth - 1, otherPlayer(player), is_max_state));
             }
         }
+
         return utility_and_move_list_map;
     }
 
@@ -137,6 +113,9 @@ public class VillarroelBot extends CheckersBoard implements CheckersPlayer {
 
         List<CheckersMove> possible_capture_list = board.possibleCaptures();
         List<CheckersMove> possible_move_list = board.possibleMoves();
+
+//        possible_capture_list.stream().filter(capture -> !isNotMyPiece(capture.getStartRow(), capture.getStartCol())).forEach(possible_capture_list::remove);
+//        possible_move_list.stream().filter(move -> !isNotMyPiece(move.getStartRow(), move.getStartCol())).forEach(possible_move_list::remove);
 
         if (possible_capture_list.isEmpty() && possible_move_list.isEmpty()) {
             return null;
@@ -148,20 +127,19 @@ public class VillarroelBot extends CheckersBoard implements CheckersPlayer {
             for (CheckersMove checkers_capture : possible_capture_list) {
                 CheckersBoard new_state = board.clone();
                 new_state.processMove(checkers_capture);
-//                successors.add(new_state);
                 successors.put(new_state, checkers_capture);
             }
         } else {
-            if (board.isMovePossible()) {
-                for (CheckersMove checkers_move : possible_move_list) {
-                    CheckersBoard new_state = board.clone();
-                    new_state.processMove(checkers_move);
-//                successors.add(new_state);
-                    successors.put(new_state, checkers_move);
-                }
+            for (CheckersMove checkers_move : possible_move_list) {
+                CheckersBoard new_state = board.clone();
+                new_state.processMove(checkers_move);
+                successors.put(new_state, checkers_move);
+
             }
         }
+
         return successors;
     }
+
 
 }
